@@ -33,6 +33,24 @@ resource "aws_security_group" "webserver" {
   vpc_id = module.vpc.vpc_id
 
   ingress {
+    from_port       = "80"
+    to_port         = "80"
+    protocol        = "tcp"
+    security_groups = [aws_security_group.webserver_lb.id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+resource "aws_security_group" "webserver_lb" {
+  vpc_id = module.vpc.vpc_id
+
+  ingress {
     from_port   = "80"
     to_port     = "80"
     protocol    = "tcp"
@@ -44,24 +62,5 @@ resource "aws_security_group" "webserver" {
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
-  }
-}
-
-resource "aws_instance" "webserver" {
-  ami                         = data.aws_ami.ubuntu.id
-  instance_type               = "t3.micro"
-  vpc_security_group_ids      = [aws_security_group.webserver.id]
-  subnet_id                   = module.vpc.public_subnets[0]
-  associate_public_ip_address = true
-  user_data                   = <<EOF
-#!/bin/bash
-sudo su -
-apt update -y &&
-apt install -y nginx
-systemctl start nginx
-EOF
-
-  tags = {
-    Name = "previse-nginx"
   }
 }

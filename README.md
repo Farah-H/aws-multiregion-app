@@ -21,3 +21,16 @@ I removed the port 22 access, and note that an improvement would be to implement
 Regarding the location of terraform modules, it's good practice to have them in a seperate repository, so that they can be versioned seperately in different environments / regions, but there's also an argument to be made for reducing number of PRs and number of steps required to deploy a change. The fast feedback loop is desirable for my local development, so they're here.
 
 At this stage I did run into issues with the AMI, the naming convention of linux AMIs is not consistent across AWS regions, so it's hard to source it dynamically, even the TF documentation does not have an example for this, only for ubuntu. I switched to an ubuntu image to save time and changed the user-data commands accordingly, but note that I would not make this decision so lightly in a live environment. 
+
+## 3. High Availability 
+
+Options: 
+A) ASG with Load Balancer, does the job, fastest
+B) EKS / Managed Kubernetes cluster -> definetely overkill, and more time consuming
+C) ECS with multiple containers - better than just running code directly on the instance, but will need at least two instances where containers are running to make sure there is still availability if the instance goes down. So this would actually also require an autoscaling group to keep two instances up, which makes me think why not just do option A. 
+D) Lambda, actually there's a nice tutorial [here](https://it20.info/2021/11/running-the-stock-nginx-container-image-with-aws-lambda/).
+
+For a live env it would also be good to load balance across multiple AZs, to protect against third party outage affecting one or more zones.
+
+Both lambda and ECS require containerisation (can just use light nginx image) and ECR respositories, task execution roles etc, so I've gone for option A as it's the fastest, and created a cross-AZ load balancer and autoscaling group, which can be accessed via the load balancer's dns_name. 
+
