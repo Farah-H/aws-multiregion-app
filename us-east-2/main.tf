@@ -39,13 +39,6 @@ resource "aws_security_group" "webserver" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  ingress {
-    from_port   = "443"
-    to_port     = "443"
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
   egress {
     from_port   = 0
     to_port     = 0
@@ -54,7 +47,7 @@ resource "aws_security_group" "webserver" {
   }
 }
 
-resource "aws_instance" "instance" {
+resource "aws_instance" "webserver" {
   ami                         = data.aws_ami.ubuntu.id
   instance_type               = "t3.micro"
   vpc_security_group_ids      = [aws_security_group.webserver.id]

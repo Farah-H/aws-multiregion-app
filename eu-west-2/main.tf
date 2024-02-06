@@ -1,70 +1,55 @@
-resource "aws_vpc" "vpc" {
-  cidr_block           = var.vpc-cidr
-  enable_dns_hostnames = true
+# this locals block is more of a stylistic decision, it makes it easy to see what variables need or should
+# be changed when duplicating to another region 
+locals {
+  vpc_cidr       = "10.10.10.0/24"
+  public_subnets = ["10.10.10.0/27", "10.10.10.32/27", "10.10.10.64/27"]
 }
 
-resource "aws_subnet" "subnet-a" {
-  vpc_id            = aws_vpc.vpc.id
-  cidr_block        = var.subnet-cidr-a
-  availability_zone = "${var.region}a"
+# dynamically source ami, because the ids are different for every region
+data "aws_ami" "ubuntu" {
+  most_recent = true
+
+  filter {
+    name   = "name"
+    values = ["ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+
+  owners = ["099720109477"] # Canonical
 }
 
-resource "aws_subnet" "subnet-b" {
-  vpc_id            = aws_vpc.vpc.id
-  cidr_block        = var.subnet-cidr-b
-  availability_zone = "${var.region}b"
+module "vpc" {
+  source = "../modules/vpc"
+
+  vpc_cidr       = local.vpc_cidr
+  public_subnets = local.public_subnets
 }
 
-resource "aws_subnet" "subnet-c" {
-  vpc_id            = aws_vpc.vpc.id
-  cidr_block        = var.subnet-cidr-c
-  availability_zone = "${var.region}c"
-}
-
-resource "aws_route_table" "subnet-route-table" {
-  vpc_id = aws_vpc.vpc.id
-}
-
-resource "aws_internet_gateway" "igw" {
-  vpc_id = aws_vpc.vpc.id
-}
-
-resource "aws_route" "subnet-route" {
-  destination_cidr_block = "0.0.0.0/0"
-  gateway_id             = aws_internet_gateway.igw.id
-  route_table_id         = aws_route_table.subnet-route-table.id
-}
-
-resource "aws_route_table_association" "subnet-a-route-table-association" {
-  subnet_id      = aws_subnet.subnet-a.id
-  route_table_id = aws_route_table.subnet-route-table.id
-}
-
-resource "aws_route_table_association" "subnet-b-route-table-association" {
-  subnet_id      = aws_subnet.subnet-b.id
-  route_table_id = aws_route_table.subnet-route-table.id
-}
-
-resource "aws_route_table_association" "subnet-c-route-table-association" {
-  subnet_id      = aws_subnet.subnet-c.id
-  route_table_id = aws_route_table.subnet-route-table.id
-}
-
-resource "aws_instance" "instance" {
-  ami                         = "ami-0ad32127d6f7eb18a"
+resource "aws_instance" "webserver" {
+  ami                         = data.aws_ami.ubuntu.id
   instance_type               = "t3.micro"
-  vpc_security_group_ids      = [aws_security_group.security-group.id]
-  subnet_id                   = aws_subnet.subnet-a.id
+  vpc_security_group_ids      = [aws_security_group.webserver.id]
+  subnet_id                   = module.vpc.public_subnets[0]
   associate_public_ip_address = true
   user_data                   = <<EOF
-#!/bin/sh
-yum install -y nginx
-service nginx start
+#!/bin/bash
+sudo su -
+apt update -y &&
+apt install -y nginx
+systemctl start nginx
 EOF
+
+  tags = {
+    Name = "previse-nginx"
+  }
 }
 
-resource "aws_security_group" "security-group" {
-  vpc_id = aws_vpc.vpc.id
+resource "aws_security_group" "webserver" {
+  vpc_id = module.vpc.vpc_id
 
   ingress {
     from_port   = "80"
@@ -78,12 +63,6 @@ resource "aws_security_group" "security-group" {
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
-  ingress {
-    from_port   = "22"
-    to_port     = "22"
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
 
   egress {
     from_port   = 0
@@ -91,8 +70,4 @@ resource "aws_security_group" "security-group" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-}
-
-output "nginx_domain" {
-  value = "http://${aws_instance.instance.public_dns}"
 }

@@ -15,7 +15,8 @@ module "vpc" {
   enable_dns_hostnames = true
   enable_dns_support   = true
 
-  create_igw                   = true
+  create_igw = true
+
   manage_default_network_acl   = true
   public_dedicated_network_acl = true
   default_network_acl_name     = "default-nacl"
