@@ -34,3 +34,27 @@ For a live env it would also be good to load balance across multiple AZs, to pro
 
 Both lambda and ECS require containerisation (can just use light nginx image) and ECR respositories, task execution roles etc, so I've gone for option A as it's the fastest, and created a cross-AZ load balancer and autoscaling group, which can be accessed via the load balancer's dns_name. 
 
+
+(I can't spend more time on this task, but please find the following ideas for how I would approach the rest of the requirements.)
+
+## 4. Private Subnets 
+I would define three private subnets and move the instances there, and would create a  NAT gateway to allow egress connectivity from the private subnet through the NAT gateway in the public subnets, and out through the IGW. It's overkill in this case, and there's definetely a cost consideration, but it's also possible to create one NAT gateway per private subnet, to avoid a single point of failure. (Image source: https://www.uturndata.com/2021/02/23/aws-quick-tips-internet-gateways-nat-gateways-and-nat-instances/)
+
+![alt text](image.png)
+
+I would use the VPC module, as it will create the route tables, route table associations etc behind the scenes. 
+
+## 5. Local Development / Docker Wrapper Script 
+1. Where will terraform run?
+    TBH This is not the solution I would choose for developers to be able to run plans because it creates unnecessary overhead. With terraform, the version constraints of all the modules should be defined using the provider blocks and in the code. So there is not really a need for an isolated environment because it's just the one dependency - the terraform version. 
+
+    If there is a desire to hold multiple versions of terraform on their machine and switch between them, then I would recommend [this command line tool ](https://github.com/warrensbox/terraform-switcher). 
+
+    If I needed to use a Dockerfile, I would make sure a) it's built on a light image, e.g alpine, and that there are as few lines as possible to reduce the size of the image and b) implement a fail-safe to make sure the correct AWS role, for example, is being pulled in. As an example, I previously used a similar tool where I was required to use `export AWS_PROFILE=<profile>` at the beginning of every terraform command, it was cumbersome but effective. 
+
+    For applies, I would use a tool such as atlantis running on a simple container service to run plans as part of PRs, and apply only when the PR has been approved, or a CI/CD pipeline, requiring approval as well. 
+
+
+2. How will devs authenticate to AWS? 
+    I would create two different AWS roles, one which devs can assume using their personal credentials and would grant read access to run terraform plans, and one which can only be assumed by the pipeline. For this OIDC can be used to avoid saving long-lived credentials onto the instance. 
+
